@@ -1,0 +1,9 @@
+error format
+
+* Colour
+* Fixed identifier (or code)
+* Linking to docs with extra help
+* position code claling error?
+* Context lines with context
+* Possibility of adding related code spans
+* Add help to the error
