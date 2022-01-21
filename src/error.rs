@@ -34,7 +34,6 @@ pub struct CustomError<T: Debug> {
     message: Option<String>,
     help: Option<String>,
     url: Option<String>,
-    code: Option<String>,
     context: Option<Context>,
     location: Option<String>,
 }
@@ -48,7 +47,6 @@ impl<T: Debug> CustomError<T> {
             message: None,
             help: None,
             url: None,
-            code: None,
             context: None,
             location: None,
         }
@@ -71,13 +69,6 @@ impl<T: Debug> CustomError<T> {
     pub fn url(self, url: impl Into<String>) -> Self {
         CustomError {
             url: Some(url.into()),
-            ..self
-        }
-    }
-
-    pub fn code(self, code: impl Into<String>) -> Self {
-        CustomError {
-            code: Some(code.into()),
             ..self
         }
     }
