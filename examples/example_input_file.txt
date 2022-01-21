@@ -1,0 +1,10 @@
+# valid line
+help 123
+# too few arguments
+help
+# too many arguments
+help help help
+# missing help
+123 123
+# not a number
+help l23

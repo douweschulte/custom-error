@@ -1,10 +1,11 @@
 use crate::colour::*;
 use crate::context::Context;
+use std::convert::From;
 use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::{Display, Formatter, Result};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum ErrorLevel {
     Error,
     Warning,
@@ -100,11 +101,25 @@ impl<T: Debug> CustomError<T> {
             ..self
         }
     }
+
+    /// Because implementing From or Into did not work
+    pub fn convert<O: From<T> + Debug>(self) -> CustomError<O> {
+        CustomError {
+            kind: self.kind.into(),
+            level: self.level,
+            title: self.title,
+            message: self.message,
+            help: self.help,
+            url: self.url,
+            context: self.context,
+            location: self.location,
+        }
+    }
 }
 
 #[macro_export]
 macro_rules! CustomError {
-    ($kind:expr, $title:expr) => {
+    ($kind:expr, $title:expr$(,)?) => {
         CustomError::new($kind, $title).location(format!("{}:{}:{}", file!(), line!(), column!()))
     };
 }
@@ -132,10 +147,128 @@ impl<T: Debug> Display for CustomError<T> {
             write!(f, "\n{}", message)?;
         }
         if let Some(help) = &self.help {
-            write!(f, "\n{}: {}", blue("help"), help)?;
+            write!(f, "\n\t{}: {}", blue("help"), help)?;
         }
         Ok(())
     }
 }
 
 impl<T: Debug> Error for CustomError<T> {}
+
+#[derive(Debug)]
+pub struct CustomErrors<T: Debug> {
+    errors: Vec<CustomError<T>>,
+}
+
+impl<T: Debug> CustomErrors<T> {
+    pub fn new() -> Self {
+        CustomErrors { errors: Vec::new() }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.errors.is_empty()
+    }
+
+    /// Because implementing From or Into did not work
+    pub fn convert<O: From<T> + Debug>(self) -> CustomErrors<O> {
+        CustomErrors {
+            errors: self.errors.into_iter().map(|e| e.convert()).collect(),
+        }
+    }
+}
+
+impl<T: Debug> Default for CustomErrors<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: Debug> std::ops::AddAssign<CustomError<T>> for CustomErrors<T> {
+    fn add_assign(&mut self, rhs: CustomError<T>) {
+        self.errors.push(rhs);
+    }
+}
+
+impl<T: Debug> Display for CustomErrors<T> {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        let mut errors = 0;
+        let mut warnings = 0;
+        let mut infos = 0;
+        for error in &self.errors {
+            writeln!(f, "{}", error)?;
+            if error.level == ErrorLevel::Error {
+                errors += 1;
+            }
+            if error.level == ErrorLevel::Warning {
+                warnings += 1;
+            }
+            if error.level == ErrorLevel::Info {
+                infos += 1;
+            }
+        }
+        if errors + warnings + infos == 0 {
+            writeln!(f, "\n{}", green("no messages!"))?;
+        } else {
+            write!(f, "\nencountered: ")?;
+            if errors > 0 {
+                write!(f, "{} {}", errors, red("errors"))?;
+            }
+            if warnings > 0 {
+                write!(f, "{} {}", warnings, yellow("warnings"))?;
+            }
+            if infos > 0 {
+                write!(f, "{} {}", infos, blue("info messages"))?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+//custom_error::CustomError<SuperError>: std::convert::From<custom_error::CustomError<Type1>>
+
+//impl<Start, End: From<Start> + Debug> Into<CustomError<End>> for CustomError<End> {
+//    fn from(error: CustomError<Start>) -> CustomError<End> {
+//        CustomError {
+//            kind: error.kind.from(),
+//            ..error
+//        }
+//    }
+//}
+
+//impl<Start: Debug, End: From<Start> + Debug> CustomError<End> {
+//    fn from(error: CustomError<Start>) -> CustomError<End> {
+//        CustomError {
+//            kind: error.kind.from(),
+//            ..error
+//        }
+//    }
+//}
+//
+//struct Point<T> {
+//    x: T,
+//    y: T,
+//}
+//
+//impl<Start, End: From<Start>> From<Point<Start>> for Point<End> {
+//    fn from(point: Point<Start>) -> Point<End> {
+//        Point {
+//            x: point.x.into(),
+//            y: point.y.into(),
+//        }
+//    }
+//}
+//
+//impl From<Point<u16>> for Point<usize> {
+//    fn from(point: Point<u16>) -> Point<usize> {
+//        Point {
+//            x: point.x.into(),
+//            y: point.y.into(),
+//        }
+//    }
+//}
+//
+//fn fun() {
+//    let p: Point<u16> = Point { x: 0, y: 0 };
+//    let p1: Point<usize> = p.into();
+//}
