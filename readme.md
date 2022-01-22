@@ -12,6 +12,7 @@ A library to easily create nice end user facing errors, especially for custom pa
 [ ] Possibility of adding related code spans, or multiple highlights within a context
 [ ] Add the option to load multiple context lines at once and specify multiple highlights
 [ ] Implement From on CustomError for common and generic Errors?
+[ ] Add notes to highlights, especially useful for multiple ones
 
 # Features
 * Builder style error messages with many optional elements

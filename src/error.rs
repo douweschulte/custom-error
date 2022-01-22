@@ -295,9 +295,9 @@ impl<T: Debug> Display for CustomError<T> {
         }
         if let Some(url) = &self.url {
             writeln!(f, "{}: {}", blue("url"), blue(url))?;
-        }
+        } //┅┅┅┅ ┉┉┉┉┉┉ ┗━━━━━━┛ ╍╍╍╍╍╍ ══════════ ╰────╯╭
         if let Some(location) = &self.location {
-            writeln!(f, "  {} {}", blue("-->"), location)?;
+            writeln!(f, "  {} generated at: {}", blue("-->"), location)?;
         }
         if let Some(context) = &self.context {
             write!(f, "{}", context)?;

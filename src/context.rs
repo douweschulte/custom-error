@@ -90,24 +90,6 @@ impl Context {
 
 impl Display for Context {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        if let Some(file) = &self.file {
-            writeln!(
-                f,
-                "  {} {}{}{}",
-                blue("-->"),
-                file,
-                self.linenumber
-                    .map(|l| ":".to_string() + &l.to_string())
-                    .unwrap_or_default(),
-                self.highlight
-                    .map(|(column, _)| self
-                        .linenumber // map over linenumber to make sure it only shows the column if the line is also known
-                        .map(|_| ":".to_string() + &column.to_string()))
-                    .flatten()
-                    .unwrap_or_default()
-            )?;
-        };
-
         let linenumber_padding = (if let Some(linenumber) = self.linenumber {
             if let Some(context_after) = &self.context_after {
                 linenumber + context_after.len()
@@ -119,7 +101,28 @@ impl Display for Context {
         } as f64)
             .log10()
             .ceil() as usize;
-        writeln!(f, "{:pad$} {}", "", blue("|"), pad = linenumber_padding)?;
+        if let Some(file) = &self.file {
+            writeln!(
+                f,
+                "{:pad$} {}[{}{}{}]",
+                "",
+                blue("╭──"),
+                file,
+                self.linenumber
+                    .map(|l| ":".to_string() + &l.to_string())
+                    .unwrap_or_default(),
+                self.highlight
+                    .map(|(column, _)| self
+                        .linenumber // map over linenumber to make sure it only shows the column if the line is also known
+                        .map(|_| ":".to_string() + &column.to_string()))
+                    .flatten()
+                    .unwrap_or_default(),
+                pad = linenumber_padding
+            )?;
+            writeln!(f, "{:pad$} {}", "", blue("│"), pad = linenumber_padding)?;
+        } else {
+            writeln!(f, "{:pad$} {}", "", blue("╷"), pad = linenumber_padding)?;
+        }
         if let Some(number) = self.linenumber {
             if let Some(before) = &self.context_before {
                 let mut current_number = number - before.len();
@@ -127,8 +130,8 @@ impl Display for Context {
                     writeln!(
                         f,
                         "{:>pad$} {} {}",
-                        current_number,
-                        blue("|"),
+                        grey(current_number.to_string()),
+                        blue("│"),
                         line,
                         pad = linenumber_padding,
                     )?;
@@ -138,8 +141,8 @@ impl Display for Context {
             writeln!(
                 f,
                 "{:>pad$} {} {}",
-                number,
-                blue("|"),
+                grey(number.to_string()),
+                blue("│"),
                 self.line,
                 pad = linenumber_padding,
             )?;
@@ -148,9 +151,9 @@ impl Display for Context {
                     f,
                     "{:>pad$} {} {}{}",
                     "",
-                    blue("|"),
+                    blue("·"),
                     " ".repeat(offset),
-                    red("^".repeat(length)),
+                    red("─".repeat(length)),
                     pad = linenumber_padding,
                 )?;
             }
@@ -160,8 +163,8 @@ impl Display for Context {
                     writeln!(
                         f,
                         "{:>pad$} {} {}",
-                        current_number,
-                        blue("|"),
+                        grey(current_number.to_string()),
+                        blue("│"),
                         line,
                         pad = linenumber_padding,
                     )?;
@@ -175,8 +178,8 @@ impl Display for Context {
                     writeln!(
                         f,
                         "{:>pad$} {} {}",
-                        current_number,
-                        blue("|"),
+                        grey(current_number.to_string()),
+                        blue("│"),
                         line,
                         pad = linenumber_padding,
                     )?;
@@ -187,7 +190,7 @@ impl Display for Context {
                 f,
                 "{:pad$} {} {}",
                 "",
-                blue("|"),
+                blue("│"),
                 self.line,
                 pad = linenumber_padding,
             )?;
@@ -196,15 +199,15 @@ impl Display for Context {
                     writeln!(
                         f,
                         "{:+>pad$} {} {}",
-                        number + 1,
-                        blue("|"),
+                        grey((number + 1).to_string()),
+                        blue("│"),
                         line,
                         pad = linenumber_padding,
                     )?;
                 }
             }
         }
-        writeln!(f, "{:pad$} {}", "", blue("|"), pad = linenumber_padding)?;
+        writeln!(f, "{:pad$} {}", "", blue("╵"), pad = linenumber_padding)?;
         Ok(())
     }
 }
