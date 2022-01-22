@@ -5,6 +5,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::{Display, Formatter, Result};
 
+/// To define an error level, is only used internally in this file
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 enum ErrorLevel {
     Error,
@@ -27,11 +28,31 @@ impl Display for ErrorLevel {
     }
 }
 
+/// An error which can be defined using builder style methods. It uses a generic
+/// type parameter to generate codes (and docs rs links) for every error. It is
+/// advised to use C style enums as the type.
+///
+/// ```
+/// use custom_error::*;
+/// enum ErrorType {
+///     NotANumber,
+///     CouldNotOpenFile,
+/// }
+///
+/// fn parse_num(input: &str) -> Result<isize, CustomError<ErrorType>> {
+///     match input.parse() {
+///         Ok(num) => Ok(num),
+///         Err(e) => Err(CustomError::new(ErrorType::NotANumber)
+///                     .message("The value provided was not a valid number")
+///                     .context(Context::new(e.to_string())))
+///     }
+/// }
+/// ```
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct CustomError<T> {
     kind: T,
     level: ErrorLevel,
-    title: String,
+    title: Option<String>,
     message: Option<String>,
     help: Option<String>,
     url: Option<String>,
@@ -41,11 +62,13 @@ pub struct CustomError<T> {
 
 /// The functionality useful for creation of a CustomError
 impl<T> CustomError<T> {
-    pub fn new(kind: T, title: impl Into<String>) -> Self {
+    /// Create a new error with the given type. It will be classified as an error
+    /// (not a warning or info message).
+    pub fn new(kind: T) -> Self {
         CustomError {
             kind,
             level: ErrorLevel::Error,
-            title: title.into(),
+            title: None,
             message: None,
             help: None,
             url: None,
@@ -54,6 +77,16 @@ impl<T> CustomError<T> {
         }
     }
 
+    /// Set the title of the error message, this will be displayed before the error code.
+    /// If you use descriptive error codes a title is not necessary.
+    pub fn title(self, title: impl Into<String>) -> Self {
+        CustomError {
+            title: Some(title.into()),
+            ..self
+        }
+    }
+
+    /// Add a message to the error.
     pub fn message(self, message: impl Into<String>) -> Self {
         CustomError {
             message: Some(message.into()),
@@ -61,6 +94,7 @@ impl<T> CustomError<T> {
         }
     }
 
+    /// Add a message to the error which is flagged with 'help:' in front of it.
     pub fn help(self, help: impl Into<String>) -> Self {
         CustomError {
             help: Some(help.into()),
@@ -68,6 +102,8 @@ impl<T> CustomError<T> {
         }
     }
 
+    /// Add a url to extra documentation for this error, if you used the macro to generate
+    /// a docs.rs url this will overwrite that url.
     pub fn url(self, url: impl Into<String>) -> Self {
         CustomError {
             url: Some(url.into()),
@@ -75,6 +111,8 @@ impl<T> CustomError<T> {
         }
     }
 
+    /// Give context for the error message, like the line where this error was encountered
+    /// while reading in a file.
     pub fn context(self, context: Context) -> Self {
         CustomError {
             context: Some(context),
@@ -82,6 +120,7 @@ impl<T> CustomError<T> {
         }
     }
 
+    /// Make this error into a warning.
     pub fn warning(self) -> Self {
         CustomError {
             level: ErrorLevel::Warning,
@@ -89,6 +128,7 @@ impl<T> CustomError<T> {
         }
     }
 
+    /// Make this error into an information message
     pub fn info(self) -> Self {
         CustomError {
             level: ErrorLevel::Info,
@@ -131,7 +171,56 @@ impl<T: Debug> CustomError<T> {
 
 /// The functionality useful for manipulation/introspection after creation
 impl<T> CustomError<T> {
-    /// Because implementing From or Into did not work
+    /// Convert one error type to another, useful if you aggregate multiple error sources together.
+    /// ```
+    /// use custom_error::*;
+    /// #[derive(Debug)]
+    /// enum Type1 {
+    ///     Error1,
+    /// }
+    ///
+    /// impl From<Type1> for SuperError {
+    ///     fn from(t: Type1) -> SuperError {
+    ///         SuperError::Type1(t)
+    ///     }
+    /// }
+    ///
+    /// #[derive(Debug)]
+    /// enum Type2 {
+    ///     Error1,
+    /// }
+    ///
+    /// impl From<Type2> for SuperError {
+    ///     fn from(t: Type2) -> SuperError {
+    ///         SuperError::Type2(t)
+    ///     }
+    /// }
+    ///
+    /// #[derive(Debug)]
+    /// enum SuperError {
+    ///     Type1(Type1),
+    ///     Type2(Type2),
+    /// }
+    ///
+    /// fn fn1() -> CustomError<Type1> {
+    ///     CustomError::new(Type1::Error1)
+    /// }
+    ///
+    /// fn fn2() -> CustomError<Type2> {
+    ///     CustomError::new(Type2::Error1)
+    /// }
+    ///
+    /// fn fn3(one: bool) -> CustomError<SuperError> {
+    ///     if one {
+    ///         fn1().convert()
+    ///     } else {
+    ///         fn2().convert()
+    ///     }
+    /// }
+    /// ```
+    /// Note: it is in the form of a method because implementing From or Into does not work. This
+    /// is the case because `impl From<T> for T` is in the standard library, which clashes with any
+    /// From implementation for generic types used.
     pub fn convert<O: From<T>>(self) -> CustomError<O> {
         CustomError {
             kind: self.kind.into(),
@@ -145,32 +234,40 @@ impl<T> CustomError<T> {
         }
     }
 
+    /// Get the kind of this error, which is the type that was provided in the creation of this error.
+    /// See [CustomError::new].
     pub fn kind(&self) -> &T {
         &self.kind
     }
 
+    /// Test if this error is flagged as an error.
     pub fn is_error(&self) -> bool {
         self.level == ErrorLevel::Error
     }
 
+    /// Test if this error is flagged as a warning.
     pub fn is_warning(&self) -> bool {
         self.level == ErrorLevel::Warning
     }
 
+    /// Test if this error is flagged as an informational message.
     pub fn is_info(&self) -> bool {
         self.level == ErrorLevel::Info
     }
 }
 
 #[macro_export]
+/// Create a CustomError with the location where it is generated annotated (in the source file).
+/// It can also create a CustomError with a link to the docs.rs page, assuming the crate is published
+/// and the used type is an enum.
 macro_rules! CustomError {
     // Create a [CustomError] with the location of the code generating this error
-    ($kind:expr, $title:expr$(,)?) => {
-        CustomError::new($kind, $title).location(format!("{}:{}:{}", file!(), line!(), column!()))
+    ($kind:expr$(,)?) => {
+        CustomError::new($kind).location(format!("{}:{}:{}", file!(), line!(), column!()))
     };
     // Create a [CustomError] with the location of the code generating this error and a link to the docs.rs page for this error (assuming it has one)
-    ($kind:expr, $title:expr, doc) => {
-        CustomError::new($kind, $title)
+    ($kind:expr, doc) => {
+        CustomError::new($kind)
             .location(format!("{}:{}:{}", file!(), line!(), column!()))
             .docs_link(module_path!(), env!("CARGO_PKG_VERSION"))
     };
@@ -178,14 +275,24 @@ macro_rules! CustomError {
 
 impl<T: Debug> Display for CustomError<T> {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        writeln!(
-            f,
-            "{}: {} ({}::{:?})",
-            self.level,
-            self.title,
-            std::any::type_name::<T>(),
-            self.kind,
-        )?;
+        if let Some(title) = &self.title {
+            writeln!(
+                f,
+                "{}: {} ({}::{:?})",
+                self.level,
+                title,
+                std::any::type_name::<T>(),
+                self.kind,
+            )?;
+        } else {
+            writeln!(
+                f,
+                "{}: {}::{:?}",
+                self.level,
+                std::any::type_name::<T>(),
+                self.kind,
+            )?;
+        }
         if let Some(url) = &self.url {
             writeln!(f, "{}: {}", blue("url"), blue(url))?;
         }

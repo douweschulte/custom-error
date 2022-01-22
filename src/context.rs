@@ -1,6 +1,27 @@
 use crate::colour::*;
 use std::fmt::{Display, Formatter, Result};
 
+/// The context for an error message. This can be created using builder style methods.
+/// ```
+/// use custom_error::*;
+/// enum ErrorType {
+///     NotANumber,
+/// }
+/// fn parse_num(line: &str, linenumber: usize) -> Result<isize, CustomError<ErrorType>> {
+///     match line.parse() {
+///         Ok(num) => Ok(num),
+///         Err(e) => Err(CustomError::new(ErrorType::NotANumber)
+///                     .message("The value provided was not a valid number")
+///                     .context(
+///                         Context::new(line) // Create the context
+///                         .linenumber(linenumber) // Add the linenumber
+///                         // Add a highlight, with an offset and length
+///                         .highlight(
+///                             line.len() - line.trim_start().len(), // Check how much whitespace there is before the number
+///                             line.len() - line.trim_end().len()))) // Check how much whitespace there is after the number
+///     }
+/// }
+/// ```
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Context {
     line: String,
@@ -12,6 +33,7 @@ pub struct Context {
 }
 
 impl Context {
+    /// Create a new Context.
     pub fn new(line: impl Into<String>) -> Self {
         Context {
             line: line.into(),
@@ -23,6 +45,7 @@ impl Context {
         }
     }
 
+    /// Add a linenumber for this context
     pub fn linenumber(self, linenumber: usize) -> Self {
         Context {
             linenumber: Some(linenumber),
@@ -30,6 +53,7 @@ impl Context {
         }
     }
 
+    /// Add lines to be displayed before the context line, if a linenumber is given the correct linenumbers will be generated.
     pub fn context_before(self, context: Vec<impl Into<String>>) -> Self {
         Context {
             context_before: Some(context.into_iter().map(|i| i.into()).collect()),
@@ -37,6 +61,7 @@ impl Context {
         }
     }
 
+    /// Add lines to be displayed after the context line, if a linenumber is given the correct linenumbers will be generated.
     pub fn context_after(self, context: Vec<impl Into<String>>) -> Self {
         Context {
             context_after: Some(context.into_iter().map(|i| i.into()).collect()),
@@ -44,6 +69,7 @@ impl Context {
         }
     }
 
+    /// Add a highlight to the context line
     pub fn highlight(self, offset: usize, length: usize) -> Self {
         Context {
             highlight: Some((offset, length)),
@@ -51,6 +77,9 @@ impl Context {
         }
     }
 
+    /// Add the name of the file where this context is located. It automatically adds linenumber information
+    /// from the linenumber (if given) and column information from the highlight (if given). Which results in
+    /// a location like this: `-->src/context.rs:81:53`.
     pub fn file(self, file: impl Into<String>) -> Self {
         Context {
             file: Some(file.into()),

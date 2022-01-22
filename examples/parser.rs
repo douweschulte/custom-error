@@ -27,15 +27,12 @@ pub mod simple {
                 }
                 let pieces: Vec<_> = split_with_offset(&line);
                 if pieces.len() != 2 {
-                    errors += CustomError::new(
-                        ParseError::IncorrectNumberOfArguments,
-                        "Incorrect number of arguments",
-                    )
-                    .context(Context::new(&line).linenumber(linenumber).file(path));
+                    errors += CustomError::new(ParseError::IncorrectNumberOfArguments)
+                        .context(Context::new(&line).linenumber(linenumber).file(path));
                     continue;
                 }
                 if pieces[0].0 != "help" {
-                    errors += CustomError::new(ParseError::MissingHelp, "Missing help")
+                    errors += CustomError::new(ParseError::MissingHelp)
                         .message("A line should always start with 'help'")
                         .context(
                             Context::new(&line)
@@ -47,7 +44,7 @@ pub mod simple {
                 match pieces[1].0.parse::<usize>() {
                     Ok(n) => output.push(n),
                     Err(e) => {
-                        errors += CustomError::new(ParseError::NotANumber, "Not a valid number")
+                        errors += CustomError::new(ParseError::NotANumber)
                             .message("After the 'help' a number should written")
                             .help(e.to_string())
                             .context(
@@ -59,7 +56,7 @@ pub mod simple {
                     }
                 }
             } else {
-                errors += CustomError!(ParseError::InvalidLine, "Invalid line");
+                errors += CustomError!(ParseError::InvalidLine);
             }
         }
         if errors.is_empty() {

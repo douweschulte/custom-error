@@ -29,11 +29,11 @@ enum SuperError {
 }
 
 fn fn1() -> CustomError<Type1> {
-    CustomError::new(Type1::Error1, "One error")
+    CustomError::new(Type1::Error1)
 }
 
 fn fn2() -> CustomError<Type2> {
-    CustomError::new(Type2::Error1, "Another error")
+    CustomError::new(Type2::Error1)
 }
 
 fn fn3(one: bool) -> CustomError<SuperError> {
