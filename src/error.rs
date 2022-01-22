@@ -5,7 +5,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::{Display, Formatter, Result};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 enum ErrorLevel {
     Error,
     Warning,
@@ -27,8 +27,8 @@ impl Display for ErrorLevel {
     }
 }
 
-#[derive(Debug)]
-pub struct CustomError<T: Debug> {
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub struct CustomError<T> {
     kind: T,
     level: ErrorLevel,
     title: String,
@@ -39,7 +39,8 @@ pub struct CustomError<T: Debug> {
     location: Option<String>,
 }
 
-impl<T: Debug> CustomError<T> {
+/// The functionality useful for creation of a CustomError
+impl<T> CustomError<T> {
     pub fn new(kind: T, title: impl Into<String>) -> Self {
         CustomError {
             kind,
@@ -95,15 +96,43 @@ impl<T: Debug> CustomError<T> {
         }
     }
 
+    /// Should not be used by end users, use the macro instead [CustomError!]
+    #[doc(hidden)]
     pub fn location(self, location: String) -> Self {
         CustomError {
             location: Some(location),
             ..self
         }
     }
+}
 
+impl<T: Debug> CustomError<T> {
+    /// Should not be used by end users, use the macro instead [CustomError!]
+    #[doc(hidden)]
+    pub fn docs_link(self, module_path: &str, version: &str) -> Self {
+        let module_path = module_path.split("::").collect::<Vec<_>>();
+        let ty = std::any::type_name::<T>().split("::");
+        CustomError {
+            url: Some(format!(
+                "https://docs.rs/{crate}/{version}/{crate}/{path}enum.{name}.html#variant.{variant:?}",
+                crate = module_path[0],
+                version = version,
+                path = module_path
+                    .iter()
+                    .skip(1)
+                    .fold("".to_string(), |acc, item| acc + item + "/"),
+                name = ty.last().unwrap(),
+                variant = self.kind
+            )),
+            ..self
+        }
+    }
+}
+
+/// The functionality useful for manipulation/introspection after creation
+impl<T> CustomError<T> {
     /// Because implementing From or Into did not work
-    pub fn convert<O: From<T> + Debug>(self) -> CustomError<O> {
+    pub fn convert<O: From<T>>(self) -> CustomError<O> {
         CustomError {
             kind: self.kind.into(),
             level: self.level,
@@ -115,18 +144,41 @@ impl<T: Debug> CustomError<T> {
             location: self.location,
         }
     }
+
+    pub fn kind(&self) -> &T {
+        &self.kind
+    }
+
+    pub fn is_error(&self) -> bool {
+        self.level == ErrorLevel::Error
+    }
+
+    pub fn is_warning(&self) -> bool {
+        self.level == ErrorLevel::Warning
+    }
+
+    pub fn is_info(&self) -> bool {
+        self.level == ErrorLevel::Info
+    }
 }
 
 #[macro_export]
 macro_rules! CustomError {
+    // Create a [CustomError] with the location of the code generating this error
     ($kind:expr, $title:expr$(,)?) => {
         CustomError::new($kind, $title).location(format!("{}:{}:{}", file!(), line!(), column!()))
+    };
+    // Create a [CustomError] with the location of the code generating this error and a link to the docs.rs page for this error (assuming it has one)
+    ($kind:expr, $title:expr, doc) => {
+        CustomError::new($kind, $title)
+            .location(format!("{}:{}:{}", file!(), line!(), column!()))
+            .docs_link(module_path!(), env!("CARGO_PKG_VERSION"))
     };
 }
 
 impl<T: Debug> Display for CustomError<T> {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(
+        writeln!(
             f,
             "{}: {} ({}::{:?})",
             self.level,
@@ -135,140 +187,22 @@ impl<T: Debug> Display for CustomError<T> {
             self.kind,
         )?;
         if let Some(url) = &self.url {
-            write!(f, "\n{}: {}", blue("url"), blue(url))?;
+            writeln!(f, "{}: {}", blue("url"), blue(url))?;
         }
         if let Some(location) = &self.location {
-            write!(f, "\n  {} {}", blue("-->"), location)?;
+            writeln!(f, "  {} {}", blue("-->"), location)?;
         }
         if let Some(context) = &self.context {
-            write!(f, "\n\n{}", context)?;
+            write!(f, "{}", context)?;
         }
         if let Some(message) = &self.message {
-            write!(f, "\n{}", message)?;
+            writeln!(f, "{}", message)?;
         }
         if let Some(help) = &self.help {
-            write!(f, "\n\t{}: {}", blue("help"), help)?;
+            writeln!(f, "  {}: {}", blue("help"), help)?;
         }
         Ok(())
     }
 }
 
 impl<T: Debug> Error for CustomError<T> {}
-
-#[derive(Debug)]
-pub struct CustomErrors<T: Debug> {
-    errors: Vec<CustomError<T>>,
-}
-
-impl<T: Debug> CustomErrors<T> {
-    pub fn new() -> Self {
-        CustomErrors { errors: Vec::new() }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.errors.is_empty()
-    }
-
-    /// Because implementing From or Into did not work
-    pub fn convert<O: From<T> + Debug>(self) -> CustomErrors<O> {
-        CustomErrors {
-            errors: self.errors.into_iter().map(|e| e.convert()).collect(),
-        }
-    }
-}
-
-impl<T: Debug> Default for CustomErrors<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T: Debug> std::ops::AddAssign<CustomError<T>> for CustomErrors<T> {
-    fn add_assign(&mut self, rhs: CustomError<T>) {
-        self.errors.push(rhs);
-    }
-}
-
-impl<T: Debug> Display for CustomErrors<T> {
-    fn fmt(&self, f: &mut Formatter) -> Result {
-        let mut errors = 0;
-        let mut warnings = 0;
-        let mut infos = 0;
-        for error in &self.errors {
-            writeln!(f, "{}", error)?;
-            if error.level == ErrorLevel::Error {
-                errors += 1;
-            }
-            if error.level == ErrorLevel::Warning {
-                warnings += 1;
-            }
-            if error.level == ErrorLevel::Info {
-                infos += 1;
-            }
-        }
-        if errors + warnings + infos == 0 {
-            writeln!(f, "\n{}", green("no messages!"))?;
-        } else {
-            write!(f, "\nencountered: ")?;
-            if errors > 0 {
-                write!(f, "{} {}", errors, red("errors"))?;
-            }
-            if warnings > 0 {
-                write!(f, "{} {}", warnings, yellow("warnings"))?;
-            }
-            if infos > 0 {
-                write!(f, "{} {}", infos, blue("info messages"))?;
-            }
-        }
-
-        Ok(())
-    }
-}
-
-//custom_error::CustomError<SuperError>: std::convert::From<custom_error::CustomError<Type1>>
-
-//impl<Start, End: From<Start> + Debug> Into<CustomError<End>> for CustomError<End> {
-//    fn from(error: CustomError<Start>) -> CustomError<End> {
-//        CustomError {
-//            kind: error.kind.from(),
-//            ..error
-//        }
-//    }
-//}
-
-//impl<Start: Debug, End: From<Start> + Debug> CustomError<End> {
-//    fn from(error: CustomError<Start>) -> CustomError<End> {
-//        CustomError {
-//            kind: error.kind.from(),
-//            ..error
-//        }
-//    }
-//}
-//
-//struct Point<T> {
-//    x: T,
-//    y: T,
-//}
-//
-//impl<Start, End: From<Start>> From<Point<Start>> for Point<End> {
-//    fn from(point: Point<Start>) -> Point<End> {
-//        Point {
-//            x: point.x.into(),
-//            y: point.y.into(),
-//        }
-//    }
-//}
-//
-//impl From<Point<u16>> for Point<usize> {
-//    fn from(point: Point<u16>) -> Point<usize> {
-//        Point {
-//            x: point.x.into(),
-//            y: point.y.into(),
-//        }
-//    }
-//}
-//
-//fn fun() {
-//    let p: Point<u16> = Point { x: 0, y: 0 };
-//    let p1: Point<usize> = p.into();
-//}

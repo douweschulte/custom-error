@@ -1,13 +1,14 @@
 use crate::colour::*;
 use std::fmt::{Display, Formatter, Result};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Context {
     line: String,
     linenumber: Option<usize>,
     context_before: Option<Vec<String>>,
     context_after: Option<Vec<String>>,
     highlight: Option<(usize, usize)>,
+    file: Option<String>,
 }
 
 impl Context {
@@ -18,6 +19,7 @@ impl Context {
             context_before: None,
             context_after: None,
             highlight: None,
+            file: None,
         }
     }
 
@@ -48,10 +50,35 @@ impl Context {
             ..self
         }
     }
+
+    pub fn file(self, file: impl Into<String>) -> Self {
+        Context {
+            file: Some(file.into()),
+            ..self
+        }
+    }
 }
 
 impl Display for Context {
     fn fmt(&self, f: &mut Formatter) -> Result {
+        if let Some(file) = &self.file {
+            writeln!(
+                f,
+                "  {} {}{}{}",
+                blue("-->"),
+                file,
+                self.linenumber
+                    .map(|l| ":".to_string() + &l.to_string())
+                    .unwrap_or_default(),
+                self.highlight
+                    .map(|(column, _)| self
+                        .linenumber // map over linenumber to make sure it only shows the column if the line is also known
+                        .map(|_| ":".to_string() + &column.to_string()))
+                    .flatten()
+                    .unwrap_or_default()
+            )?;
+        };
+
         let linenumber_padding = (if let Some(linenumber) = self.linenumber {
             if let Some(context_after) = &self.context_after {
                 linenumber + context_after.len()

@@ -2,6 +2,8 @@
 name = "custom-error"
 version = "0.1.0"
 edition = "2021"
+authors = ["D. Schulte <d.schulte@uu.nl>"]
+license = "MIT"
 
 [features]
 default = ["ansi_term"]
