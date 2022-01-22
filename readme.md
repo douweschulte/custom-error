@@ -2,17 +2,17 @@
 
 A library to easily create nice end user facing errors, especially for custom parsing work.
 
-[*] Colour
-[*] Fixed identifier (or code) (=> path to type)
-[*] position code calling error? (=> only if called with macro)
-[*] Context lines with context
-[*] Add help to the error
-[*] Test when using multiple enums as type source, how does it combine?
-[*] Linking to docs with extra help, automatically create link to docs on the enum type (only works on published crates, only using the macro, figure out a nice way to call)
-[ ] Possibility of adding related code spans, or multiple highlights within a context
-[ ] Add the option to load multiple context lines at once and specify multiple highlights
-[ ] Implement From on CustomError for common and generic Errors?
-[ ] Add notes to highlights, especially useful for multiple ones
+- [x] Colour
+- [x] Fixed identifier (or code) (=> path to type)
+- [x] position code calling error? (=> only if called with macro)
+- [x] Context lines with context
+- [x] Add help to the error
+- [x] Test when using multiple enums as type source, how does it combine?
+- [x] Linking to docs with extra help, automatically create link to docs on the enum type (only works on published crates, only using the macro, figure out a nice way to call)
+- [ ] Possibility of adding related code spans, or multiple highlights within a context
+- [ ] Add the option to load multiple context lines at once and specify multiple highlights
+- [ ] Implement From on CustomError for common and generic Errors?
+- [ ] Add notes to highlights, especially useful for multiple ones
 
 # Features
 * Builder style error messages with many optional elements
