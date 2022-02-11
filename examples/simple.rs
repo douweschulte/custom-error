@@ -13,7 +13,7 @@ fn main() {
             "{}",
             CustomError::new(ErrorType::ParseError)
                 .message("I did really expect to parse it as an isize.")
-                .context(Context::new(e.to_string()))
+                .context(Context::line(e.to_string()))
         )
     }
 
@@ -26,12 +26,27 @@ fn main() {
 
     println!(
         "{}",
-        CustomError!(ErrorType::IntegerOverflow).context(
-            Context::new("    let x = n / test;")
-                .linenumber(123)
-                .context_before(vec!["fn calc(test: usize) {", "    let n = 123;"])
-                .context_after(vec!["    println!(\"{}\", x);", "}"])
-                .highlight(12, 8)
-        )
+        CustomError!(ErrorType::IntegerOverflow).multiple_context(vec![
+            Context::lines(vec!["use crate::*;", "#[deny(overflow)]", "",])
+                .linenumber(5)
+                .highlights(vec![Highlight::new(1, 8, 7)
+                    .note("Overflow deny is set here")
+                    .info(),]),
+            Context::lines(vec![
+                "fn calc(test: usize) {",
+                "    let n = 123;",
+                "    let x = n * test;",
+                "    println!(\"{}\", x);",
+                "}"
+            ])
+            .linenumber(121)
+            .highlights(vec![
+                Highlight::new(2, 12, 8).note("Overflow happened here"),
+                Highlight::new(1, 8, 7).note("'n' is small").info(),
+                Highlight::new(0, 8, 4)
+                    .note("'test' is unconstrained")
+                    .info(),
+            ]),
+        ])
     );
 }

@@ -1,4 +1,5 @@
 use crate::colour::*;
+use crate::error::ErrorLevel;
 use std::fmt::{Display, Formatter, Result};
 
 /// The context for an error message. This can be created using builder style methods.
@@ -24,28 +25,34 @@ use std::fmt::{Display, Formatter, Result};
 /// ```
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Context {
-    line: String,
+    lines: Vec<String>,
     linenumber: Option<usize>,
-    context_before: Option<Vec<String>>,
-    context_after: Option<Vec<String>>,
-    highlight: Option<(usize, usize)>,
+    highlights: Vec<Highlight>,
     file: Option<String>,
 }
 
 impl Context {
-    /// Create a new Context.
-    pub fn new(line: impl Into<String>) -> Self {
+    /// Create a new Context with a single line
+    pub fn line(line: impl Into<String>) -> Self {
         Context {
-            line: line.into(),
+            lines: vec![line.into()],
             linenumber: None,
-            context_before: None,
-            context_after: None,
-            highlight: None,
+            highlights: Vec::new(),
             file: None,
         }
     }
 
-    /// Add a linenumber for this context
+    /// Create a new Context with multiple lines
+    pub fn lines(lines: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Context {
+            lines: lines.into_iter().map(|i| i.into()).collect(),
+            linenumber: None,
+            highlights: Vec::new(),
+            file: None,
+        }
+    }
+
+    /// Add a linenumber for the first line in the given lines
     pub fn linenumber(self, linenumber: usize) -> Self {
         Context {
             linenumber: Some(linenumber),
@@ -53,28 +60,20 @@ impl Context {
         }
     }
 
-    /// Add lines to be displayed before the context line, if a linenumber is given the correct linenumbers will be generated.
-    pub fn context_before(self, context: Vec<impl Into<String>>) -> Self {
-        Context {
-            context_before: Some(context.into_iter().map(|i| i.into()).collect()),
-            ..self
-        }
+    /// Add a single highlight to the context line
+    pub fn highlight(mut self, highlight: impl Into<Highlight>) -> Self {
+        self.highlights.push(highlight.into());
+        self
     }
 
-    /// Add lines to be displayed after the context line, if a linenumber is given the correct linenumbers will be generated.
-    pub fn context_after(self, context: Vec<impl Into<String>>) -> Self {
-        Context {
-            context_after: Some(context.into_iter().map(|i| i.into()).collect()),
-            ..self
-        }
-    }
-
-    /// Add a highlight to the context line
-    pub fn highlight(self, offset: usize, length: usize) -> Self {
-        Context {
-            highlight: Some((offset, length)),
-            ..self
-        }
+    /// Add highlights to the context line
+    pub fn highlights(
+        mut self,
+        highlights: impl IntoIterator<Item = impl Into<Highlight>>,
+    ) -> Self {
+        self.highlights
+            .extend(highlights.into_iter().map(|i| i.into()));
+        self
     }
 
     /// Add the name of the file where this context is located. It automatically adds linenumber information
@@ -88,125 +87,140 @@ impl Context {
     }
 }
 
+/// A highlight in a context for an error.
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub struct Highlight {
+    /// The line offset in the list of lines for a context
+    line: usize,
+    /// The column in the specified line
+    column: usize,
+    /// The length of the highlight
+    length: usize,
+    /// An optional note to display after the highlight
+    note: Option<String>,
+    level: ErrorLevel,
+}
+
+impl Highlight {
+    /// Create a new highlight at the given position
+    pub fn new(line: usize, column: usize, length: usize) -> Self {
+        Self {
+            line,
+            column,
+            length,
+            note: None,
+            level: ErrorLevel::Error,
+        }
+    }
+
+    /// Add a note to the highlight
+    pub fn note(self, note: impl Into<String>) -> Self {
+        Self {
+            note: Some(note.into()),
+            ..self
+        }
+    }
+
+    /// Make this error into a warning.
+    pub fn warning(self) -> Self {
+        Self {
+            level: ErrorLevel::Warning,
+            ..self
+        }
+    }
+
+    /// Make this error into an information message
+    pub fn info(self) -> Self {
+        Self {
+            level: ErrorLevel::Info,
+            ..self
+        }
+    }
+}
+
+impl From<(usize, usize, usize)> for Highlight {
+    fn from(tuple: (usize, usize, usize)) -> Self {
+        Highlight::new(tuple.0, tuple.1, tuple.2)
+    }
+}
+
 impl Display for Context {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        let linenumber_padding = (if let Some(linenumber) = self.linenumber {
-            if let Some(context_after) = &self.context_after {
-                linenumber + context_after.len()
-            } else {
-                linenumber
-            }
-        } else {
-            0
-        } as f64)
+        // Determine how many chars are needed to display the biggest line number, default is 1 to have at least 1 character
+        let linenumber_padding = ((self.linenumber.unwrap_or(1) + self.lines.len()) as f64)
             .log10()
             .ceil() as usize;
+
         if let Some(file) = &self.file {
-            writeln!(
-                f,
-                "{:pad$} {}[{}{}{}]",
-                "",
-                blue("╭──"),
-                file,
-                self.linenumber
-                    .map(|l| ":".to_string() + &l.to_string())
-                    .unwrap_or_default(),
-                self.highlight
-                    .map(|(column, _)| self
-                        .linenumber // map over linenumber to make sure it only shows the column if the line is also known
-                        .map(|_| ":".to_string() + &column.to_string()))
-                    .flatten()
-                    .unwrap_or_default(),
-                pad = linenumber_padding
-            )?;
+            if self.highlights.len() == 1 {
+                // Show the filename and location of the highlight (if there is only one)
+                writeln!(
+                    f,
+                    "{:pad$} {}[{}{}]",
+                    "",
+                    blue("╭──"),
+                    file,
+                    self.linenumber // Show the linenumber followed by the column if the linenumber is known
+                        .map(|l| {
+                            let highlight = &self.highlights[0];
+                            format!(":{}:{}", l + highlight.line, highlight.column)
+                        })
+                        .unwrap_or_else(|| "".to_string()),
+                    pad = linenumber_padding
+                )?;
+            } else {
+                // If there are no or multiple highlights only show the filename
+                writeln!(
+                    f,
+                    "{:pad$} {}[{}]",
+                    "",
+                    blue("╭──"),
+                    file,
+                    pad = linenumber_padding
+                )?;
+            }
+            // Extend the sideline so that it provides a single line of border between the file header and content
             writeln!(f, "{:pad$} {}", "", blue("│"), pad = linenumber_padding)?;
         } else {
+            // If there is no file known just end the sideline nicely
             writeln!(f, "{:pad$} {}", "", blue("╷"), pad = linenumber_padding)?;
         }
-        if let Some(number) = self.linenumber {
-            if let Some(before) = &self.context_before {
-                let mut current_number = number - before.len();
-                for line in before {
-                    writeln!(
-                        f,
-                        "{:>pad$} {} {}",
-                        grey(current_number.to_string()),
-                        blue("│"),
-                        line,
-                        pad = linenumber_padding,
-                    )?;
-                    current_number += 1;
-                }
-            }
+
+        // Use offset numbers if there is no linenumber given
+        let linenumber = self.linenumber.unwrap_or(0);
+        for (index, line) in self.lines.iter().enumerate() {
+            // Write the current line
             writeln!(
                 f,
                 "{:>pad$} {} {}",
-                grey(number.to_string()),
+                grey((linenumber + index).to_string()),
                 blue("│"),
-                self.line,
+                line,
                 pad = linenumber_padding,
             )?;
-            if let Some((offset, length)) = self.highlight {
-                writeln!(
-                    f,
-                    "{:>pad$} {} {}{}",
-                    "",
-                    blue("·"),
-                    " ".repeat(offset),
-                    red("─".repeat(length)),
-                    pad = linenumber_padding,
-                )?;
-            }
-            if let Some(after) = &self.context_after {
-                let mut current_number = number + 1;
-                for line in after {
+            // Determine if there needs to be a highlight
+            for highlight in &self.highlights {
+                if index == highlight.line {
                     writeln!(
                         f,
-                        "{:>pad$} {} {}",
-                        grey(current_number.to_string()),
-                        blue("│"),
-                        line,
-                        pad = linenumber_padding,
-                    )?;
-                    current_number += 1;
-                }
-            }
-        } else {
-            if let Some(before) = &self.context_before {
-                let mut current_number = -(before.len() as isize);
-                for line in before {
-                    writeln!(
-                        f,
-                        "{:>pad$} {} {}",
-                        grey(current_number.to_string()),
-                        blue("│"),
-                        line,
-                        pad = linenumber_padding,
-                    )?;
-                    current_number += 1;
-                }
-            }
-            writeln!(
-                f,
-                "{:pad$} {} {}",
-                "",
-                blue("│"),
-                self.line,
-                pad = linenumber_padding,
-            )?;
-            if let Some(after) = &self.context_after {
-                for (number, line) in after.iter().enumerate() {
-                    writeln!(
-                        f,
-                        "{:+>pad$} {} {}",
-                        grey((number + 1).to_string()),
-                        blue("│"),
-                        line,
+                        "{:>pad$} {} {}{}{}",
+                        "",
+                        blue("·"),
+                        " ".repeat(highlight.column),
+                        highlight.level.in_colour("─".repeat(highlight.length)),
+                        highlight.level.in_colour(
+                            highlight
+                                .note
+                                .as_ref()
+                                .map(|n| " ".to_string() + n)
+                                .unwrap_or_else(|| "".to_string())
+                        ),
                         pad = linenumber_padding,
                     )?;
                 }
             }
         }
+        // Nicely end the sideline
         writeln!(f, "{:pad$} {}", "", blue("╵"), pad = linenumber_padding)?;
         Ok(())
     }

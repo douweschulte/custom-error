@@ -7,10 +7,20 @@ use std::fmt::{Display, Formatter};
 
 /// To define an error level, is only used internally in this file
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-enum ErrorLevel {
+pub(crate) enum ErrorLevel {
     Error,
     Warning,
     Info,
+}
+
+impl ErrorLevel {
+    pub fn in_colour(self, text: impl Into<String>) -> String {
+        match self {
+            ErrorLevel::Error => red(text),
+            ErrorLevel::Warning => yellow(text),
+            ErrorLevel::Info => blue(text),
+        }
+    }
 }
 
 impl Display for ErrorLevel {
@@ -56,7 +66,7 @@ pub struct CustomError<T> {
     message: Option<String>,
     help: Option<String>,
     url: Option<String>,
-    context: Option<Context>,
+    context: Vec<Context>,
     location: Option<String>,
 }
 
@@ -72,7 +82,7 @@ impl<T> CustomError<T> {
             message: None,
             help: None,
             url: None,
-            context: None,
+            context: Vec::new(),
             location: None,
         }
     }
@@ -112,12 +122,18 @@ impl<T> CustomError<T> {
     }
 
     /// Give context for the error message, like the line where this error was encountered
-    /// while reading in a file.
-    pub fn context(self, context: Context) -> Self {
-        CustomError {
-            context: Some(context),
-            ..self
-        }
+    /// while reading in a file. Calling this multiple times adds all context
+    pub fn context(mut self, context: Context) -> Self {
+        self.context.push(context);
+        self
+    }
+
+    /// Give multiple pieces of context for the error message, like the line where this error
+    /// was encountered while reading in a file. With earlier/later pieces of code that made
+    /// this error appear. Like setting a lint to deny in clippy, it show the deny line as well.
+    pub fn multiple_context(mut self, context: impl IntoIterator<Item = Context>) -> Self {
+        self.context.extend(context);
+        self
     }
 
     /// Make this error into a warning.
@@ -299,7 +315,7 @@ impl<T: Debug> Display for CustomError<T> {
         if let Some(location) = &self.location {
             writeln!(f, "  {} generated at: {}", blue("-->"), location)?;
         }
-        if let Some(context) = &self.context {
+        for context in &self.context {
             write!(f, "{}", context)?;
         }
         if let Some(message) = &self.message {

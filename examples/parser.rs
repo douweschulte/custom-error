@@ -3,11 +3,13 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 pub mod simple {
+    use custom_error::Highlight;
+
     use super::*;
 
     #[derive(Debug)]
     pub enum ParseError {
-        /// Where the value provided is not a valid number. Note there are some characters which look like numbers like l and I which look like 1.
+        /// Where the value provided is not a valid number.
         NotANumber,
         MissingHelp,
         IncorrectNumberOfArguments,
@@ -28,17 +30,17 @@ pub mod simple {
                 let pieces: Vec<_> = split_with_offset(&line);
                 if pieces.len() != 2 {
                     errors += CustomError::new(ParseError::IncorrectNumberOfArguments)
-                        .context(Context::new(&line).linenumber(linenumber).file(path));
+                        .context(Context::line(&line).linenumber(linenumber).file(path));
                     continue;
                 }
                 if pieces[0].0 != "help" {
                     errors += CustomError::new(ParseError::MissingHelp)
                         .message("A line should always start with 'help'")
                         .context(
-                            Context::new(&line)
+                            Context::line(&line)
                                 .linenumber(linenumber)
                                 .file(path)
-                                .highlight(pieces[0].1, pieces[0].2),
+                                .highlight((0, pieces[0].1, pieces[0].2)),
                         );
                 }
                 match pieces[1].0.parse::<usize>() {
@@ -48,10 +50,21 @@ pub mod simple {
                             .message("After the 'help' a number should written")
                             .help(e.to_string())
                             .context(
-                                Context::new(&line)
+                                Context::line(&line)
                                     .linenumber(linenumber)
                                     .file(path)
-                                    .highlight(pieces[1].1, pieces[1].2),
+                                    .highlight({
+                                        let high = Highlight::new(0, pieces[1].1, pieces[1].2);
+                                        if line[pieces[1].1..pieces[1].1 + pieces[1].2]
+                                            .contains(['l', 'I', 'O'])
+                                        {
+                                            high.note(
+                                            "It contains characters which look a lot like digits",
+                                        )
+                                        } else {
+                                            high
+                                        }
+                                    }),
                             )
                     }
                 }

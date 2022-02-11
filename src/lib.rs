@@ -44,6 +44,6 @@ mod context;
 mod error;
 mod errors;
 
-pub use context::Context;
+pub use context::*;
 pub use error::*;
 pub use errors::CustomErrors;
