@@ -3,7 +3,7 @@ use crate::context::Context;
 use std::convert::From;
 use std::error::Error;
 use std::fmt::Debug;
-use std::fmt::{Display, Formatter, Result};
+use std::fmt::{Display, Formatter};
 
 /// To define an error level, is only used internally in this file
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -14,7 +14,7 @@ enum ErrorLevel {
 }
 
 impl Display for ErrorLevel {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "{}",
@@ -274,7 +274,7 @@ macro_rules! CustomError {
 }
 
 impl<T: Debug> Display for CustomError<T> {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(title) = &self.title {
             writeln!(
                 f,
@@ -313,3 +313,72 @@ impl<T: Debug> Display for CustomError<T> {
 }
 
 impl<T: Debug> Error for CustomError<T> {}
+
+/// A trait to help with creating Custom Errors from structs that are normally used with .unwrap().
+pub trait CustomErrorUnwrap<T> {
+    /// Use this to create a new error message based on a type normally unwrapped.
+    /// ```
+    /// use custom_error::*;
+    /// enum ErrorType{
+    ///     NotANumber
+    /// }
+    /// fn test() -> Result<(), CustomError<ErrorType>> {
+    ///     let a: Result<usize, _> = "12e".parse();
+    ///     a.unwrap_or_error(CustomError::new(ErrorType::NotANumber))?; // Use '?' to propagate the error
+    ///     Ok(())
+    /// }
+    /// ```
+    fn unwrap_or_error<E>(self, error: CustomError<E>) -> Result<T, CustomError<E>>;
+}
+
+/// A trait to help with creating Custom Errors from structs that are normally used with .unwrap().
+pub trait CustomErrorFnUnwrap<T, R> {
+    /// Use this to create a new error message based on a type normally unwrapped.
+    /// ```
+    /// use custom_error::*;
+    /// enum ErrorType{
+    ///     NotANumber
+    /// }
+    /// fn test() -> Result<(), CustomError<ErrorType>> {
+    ///     let a: Result<usize, _> = "12e".parse();
+    ///     a.unwrap_or_error_fn(|e| CustomError::new(ErrorType::NotANumber).message(e.to_string()))?; // Use '?' to propagate the error
+    ///     Ok(())
+    /// }
+    /// ```
+    fn unwrap_or_error_fn<E, F: Fn(R) -> CustomError<E>>(
+        self,
+        error_fn: F,
+    ) -> Result<T, CustomError<E>>;
+}
+
+impl<T, R> CustomErrorUnwrap<T> for Result<T, R> {
+    fn unwrap_or_error<E>(self, error: CustomError<E>) -> Result<T, CustomError<E>> {
+        if let Ok(o) = self {
+            Ok(o)
+        } else {
+            Err(error)
+        }
+    }
+}
+
+impl<T, R> CustomErrorFnUnwrap<T, R> for Result<T, R> {
+    fn unwrap_or_error_fn<E, F: Fn(R) -> CustomError<E>>(
+        self,
+        error_fn: F,
+    ) -> Result<T, CustomError<E>> {
+        match self {
+            Ok(o) => Ok(o),
+            Err(e) => Err(error_fn(e)),
+        }
+    }
+}
+
+impl<T> CustomErrorUnwrap<T> for Option<T> {
+    fn unwrap_or_error<E>(self, error: CustomError<E>) -> Result<T, CustomError<E>> {
+        if let Some(o) = self {
+            Ok(o)
+        } else {
+            Err(error)
+        }
+    }
+}

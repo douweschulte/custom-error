@@ -9,6 +9,7 @@ A library to easily create nice end user facing errors, especially for custom pa
 - [x] Add help to the error
 - [x] Test when using multiple enums as type source, how does it combine?
 - [x] Linking to docs with extra help, automatically create link to docs on the enum type (only works on published crates, only using the macro, figure out a nice way to call)
+- [x] Simple unwrap like addition? Option&lt;T&gt;.unwrap_or_error(CustomError&lt;E&gt;)
 - [ ] Possibility of adding related code spans, or multiple highlights within a context
 - [ ] Add the option to load multiple context lines at once and specify multiple highlights
 - [ ] Implement From on CustomError for common and generic Errors?
