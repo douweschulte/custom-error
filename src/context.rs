@@ -14,12 +14,12 @@ use std::fmt::{Display, Formatter, Result};
 ///         Err(e) => Err(CustomError::new(ErrorType::NotANumber)
 ///                     .message("The value provided was not a valid number")
 ///                     .context(
-///                         Context::new(line) // Create the context
+///                         Context::line(line) // Create the context
 ///                         .linenumber(linenumber) // Add the linenumber
 ///                         // Add a highlight, with an offset and length
 ///                         .highlight(
-///                             line.len() - line.trim_start().len(), // Check how much whitespace there is before the number
-///                             line.len() - line.trim_end().len()))) // Check how much whitespace there is after the number
+///                             (line.len() - line.trim_start().len(), // Check how much whitespace there is before the number
+///                             line.len() - line.trim_end().len())))) // Check how much whitespace there is after the number
 ///     }
 /// }
 /// ```
@@ -141,6 +141,12 @@ impl Highlight {
 impl From<(usize, usize, usize)> for Highlight {
     fn from(tuple: (usize, usize, usize)) -> Self {
         Highlight::new(tuple.0, tuple.1, tuple.2)
+    }
+}
+
+impl From<(usize, usize)> for Highlight {
+    fn from(tuple: (usize, usize)) -> Self {
+        Highlight::new(0, tuple.0, tuple.1)
     }
 }
 

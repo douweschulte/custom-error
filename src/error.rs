@@ -54,7 +54,7 @@ impl Display for ErrorLevel {
 ///         Ok(num) => Ok(num),
 ///         Err(e) => Err(CustomError::new(ErrorType::NotANumber)
 ///                     .message("The value provided was not a valid number")
-///                     .context(Context::new(e.to_string())))
+///                     .context(Context::line(e.to_string())))
 ///     }
 /// }
 /// ```
